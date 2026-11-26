@@ -1,4 +1,4 @@
-const CACHE = 'scanpay-shell-v4'
+const CACHE = 'scanpay-shell-v5'
 self.addEventListener('install', event => {
  event.waitUntil((async()=>{
   const cache=await caches.open(CACHE)

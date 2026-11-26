@@ -66,3 +66,7 @@ Hubungkan repositori dengan proyek Next.js dan gunakan Node.js 24. Deployment pu
 Buat OAuth Client berjenis **Web application** di Google Cloud dan daftarkan callback `https://scanpay-go.vercel.app/api/auth/callback/google`. Atur `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, dan `AUTH_SECRET` (nilai acak kuat) di Environment Variables untuk Production, lalu deploy ulang. Login Google hanya menerima alamat email yang telah diverifikasi oleh Google. Akun yang masuk berperan sebagai pelanggan. Login demo lokal tidak tersedia pada deployment Vercel.
 
 Checkout Vercel memerlukan integrasi toko dan provider pembayaran yang disetujui. Mengisi kredensial Google atau konfigurasi Postgres saja tidak mengaktifkan pembayaran.
+
+### Kelola Toko
+
+Isi `DIRECTORY_POSTGRES_URL` dengan koneksi PostgreSQL produksi dan `SCANPAY_DIRECTORY_ADMINS` dengan alamat email Google yang diizinkan, dipisahkan koma. Simpan di Environment Variables Vercel, lalu deploy ulang. Database perlu izin membuat tabel `scanpay_store_directory`; pada penggunaan pertama aplikasi memasukkan dua lokasi awal. Setelah login Google, admin membuka **Profil → Kelola Toko** untuk menambah atau mengedit lokasi. Perubahan tampil di halaman **Toko → Lokasi gerai**. Tautan Google Maps opsional. Lokasi direktori berstatus transaksi belum terhubung sampai ada integrasi toko.

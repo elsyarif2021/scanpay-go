@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { InputError } from '../../../lib/db.mjs'
 import { execute } from '../../../lib/hosted-db.mjs'
 import { auth, googleLoginConfigured } from '../../../lib/auth'
+import {canManageDirectory,directoryConfigured} from '../../../lib/store-directory'
 import QRCode from 'qrcode'
 
 export const runtime = 'nodejs'
@@ -24,6 +25,8 @@ export async function POST(req: NextRequest, {params}: {params: Promise<{action:
     name:identity?.name,
     readOnly:true,
     googleLoginConfigured,
+    directoryAdmin:canManageDirectory(identity?.email),
+    directoryConfigured,
    },{headers:{'Cache-Control':'no-store'}})
   }
   if(hosted && action!=='catalog') throw new InputError('Transaksi belum tersedia untuk toko yang belum terhubung.',503)

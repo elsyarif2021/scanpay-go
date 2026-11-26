@@ -2,12 +2,13 @@
 import {useState,useEffect,useRef,useCallback, type FormEvent} from 'react'
 import {ScanLine, LayoutGrid, Store, History, UserRound, ShoppingBag, ChevronDown, Search, ArrowRight, MapPin, Plus, Minus, Sun, Moon, PanelLeftClose, Menu, X, Camera, Barcode, CreditCard, Banknote, ReceiptText, Download, CircleCheck, ShieldCheck, WifiOff, Package, Coffee, Apple, Sandwich, ChevronRight, QrCode} from 'lucide-react'
 import {signIn as googleSignIn,signOut as googleSignOut} from 'next-auth/react'
-import {storeLocations} from '../lib/store-locations'
+import {storeLocations,type StoreLocation} from '../lib/store-locations'
+import {StoreDirectoryAdmin} from './store-directory-admin'
 import {draftDB,type Draft} from '../lib/draft'
 type Product={store:string;code:string;name:string;category:string;price:number;stock:number;icon:string}
 type Branch={id:string;name:string;merchant:string;area:string;active:number}
 type Order={id:string;store:string;status:string;payment:string;verification:string;total:number;commission:number;received:number|null;created:number;expires:number;qr?:string;qrImage?:string;items:{code:string;name:string;price:number;qty:number}[]}
-type Session={role:string|null;store:string|null;readOnly?:boolean;name?:string;googleLoginConfigured?:boolean}
+type Session={role:string|null;store:string|null;readOnly?:boolean;name?:string;googleLoginConfigured?:boolean;directoryAdmin?:boolean;directoryConfigured?:boolean}
 type InstallEvent=Event & {prompt:()=>Promise<void>}
 type AdminData={commission:number;logs:{action:string;entity:string;time:number;actor:string}[]}
 const money=(v:number)=>'Rp'+new Intl.NumberFormat('id-ID').format(v)
@@ -63,6 +64,8 @@ export default function Page(){
  const [view,setView]=useState('Beranda')
  const [session,setSession]=useState<Session>({role:null,store:null,readOnly:process.env.NEXT_PUBLIC_VERCEL_ENV==='production'||process.env.NEXT_PUBLIC_VERCEL_ENV==='preview'})
  const [stores,setStores]=useState<Branch[]>([])
+ const [locations,setLocations]=useState(storeLocations)
+ const [locationError,setLocationError]=useState('')
  const [products,setProducts]=useState<Product[]>([])
  const [draft,setDraft]=useState<Draft|null>(null)
  const [orders,setOrders]=useState<Order[]>([])
@@ -136,6 +139,15 @@ export default function Page(){
   if((session.role==='owner'||session.role==='manager')&&online)api<Product[]>('inventory',{store:staffBranch}).then(setStock).catch(e=>notify(e.message))
  },[staffBranch,session.role,online,notify])
  useEffect(()=>{if(online&&failure)void reload(branch).catch(()=>{})},[online,branch,failure,reload])
+ useEffect(()=>{
+  if(!online||!['Toko','Kelola Toko'].includes(view))return
+  const controller=new AbortController()
+  fetch('/api/store-directory',{cache:'no-store',signal:controller.signal}).then(async response=>{
+   if(!response.ok)throw new Error()
+   setLocations(await response.json());setLocationError('')
+  }).catch(()=>{if(!controller.signal.aborted)setLocationError('Daftar lokasi terbaru belum bisa dimuat.')})
+  return ()=>controller.abort()
+ },[online,view])
  const items=draft?.store===branch?draft.items:{}
  const count=Object.values(items).reduce((sum,n)=>sum+n,0)
  const cart=products.filter(p=>items[p.code])
@@ -143,7 +155,7 @@ export default function Page(){
  const matching=products.filter(p=>(category==='Semua'||p.category===category)&&[p.name,p.category,p.code].join(' ').toLowerCase().includes(query.trim().toLowerCase()))
  const storeQuery=query.trim().toLowerCase()
  const matchingStores=stores.filter(s=>[s.name,s.area].join(' ').toLowerCase().includes(storeQuery))
- const matchingLocations=storeLocations.filter(s=>[s.name,s.address].join(' ').toLowerCase().includes(storeQuery))
+ const matchingLocations=locations.filter(s=>[s.name,s.address].join(' ').toLowerCase().includes(storeQuery))
  const filteredOrders=orders.filter(o=>filter==='all'||filter===o.status)
  const done=orders.filter(o=>o.status==='completed')
  const sales=done.reduce((sum,o)=>sum+o.total,0)
@@ -237,14 +249,15 @@ export default function Page(){
     <div><h1>Pilih toko</h1><p>Cari gerai dan lokasi belanja.</p></div>
     <label className="search"><Search size={18}/><input aria-label="Cari toko" placeholder="Cari nama atau lokasi…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
    </div>
+   {locationError&&<div className="banner">{locationError}</div>}
    {matchingLocations.length>0&&<>
     <div className="section-title"><h2>Lokasi gerai</h2></div>
-    <div className="store-grid">{matchingLocations.map(location=><article className="panel" key={location.name}>
+    <div className="store-grid">{matchingLocations.map(location=><article className="panel" key={location.id}>
      <div className="tile-icon"><Store/></div>
      <h2>{location.name}</h2>
      <p><MapPin size={15}/> {location.address}</p>
      <p><span className="badge">Transaksi belum terhubung</span></p>
-     <a className="secondary directions" href={location.directions} target="_blank" rel="noopener noreferrer" aria-label={'Petunjuk arah ke '+location.name}>Petunjuk arah <ArrowRight size={16}/></a>
+     {location.directions&&<a className="secondary directions" href={location.directions} target="_blank" rel="noopener noreferrer" aria-label={'Petunjuk arah ke '+location.name}>Petunjuk arah <ArrowRight size={16}/></a>}
     </article>)}</div>
    </>}
    {matchingStores.length>0&&<>
@@ -271,8 +284,13 @@ export default function Page(){
      : <button className="primary" disabled={busy} onClick={()=>session.role?void perform(async()=>{await api('logout');setSession({role:null,store:null});setOrders([]);setReceipt(null);setTicket(null);setModal('');go('Beranda')}):setModal('login')}>{session.role?'Keluar':'Masuk demo lokal'}</button>}
      <button className="secondary" onClick={()=>install?void install.prompt().then(()=>setInstall(null)).catch(()=>setModal('install')):setModal('install')}><Download size={17}/> Instal ScanPay</button>
     </div>
+    {session.directoryAdmin&&<button className="secondary stretch" onClick={()=>go('Kelola Toko')}><Store size={17}/> Kelola Toko</button>}
     {session.readOnly&&!session.role&&!session.googleLoginConfigured&&<p>Login Google menunggu konfigurasi OAuth.</p>}
    </div>
+  </>}
+  {session.directoryAdmin&&view==='Kelola Toko'&&<>
+   {locationError&&<div className="banner">{locationError}</div>}
+   <StoreDirectoryAdmin locations={locations} configured={!!session.directoryConfigured&&online} onSaved={location=>setLocations(current=>[...current.filter(item=>item.id!==location.id),location].sort((a,b)=>a.name.localeCompare(b.name,'id')))}/>
   </>}
   {staff&&view==='Dashboard'&&<>
    <div className="heading"><div><h1>Dashboard {labels[session.role!].toLowerCase()}</h1><p>{session.role==='admin'?'Pantau transaksi dan pengaturan marketplace.':storeName(session.store||'')}</p></div>{['cashier','manager'].includes(session.role!)&&<button className="primary" onClick={()=>setModal('ticket')}><QrCode size={19}/> Scan QR pelanggan</button>}</div>
