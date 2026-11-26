@@ -59,4 +59,10 @@ Versi ini adalah demo lokal dengan pemilihan peran terbuka. Gunakan satu server 
 
 ### Vercel
 
-Hubungkan repositori dengan proyek Next.js dan gunakan Node.js 24. Untuk demo transaksi, sambungkan Postgres dan atur `POSTGRES_URL` (atau `DATABASE_URL`) sebagai variabel server. Gunakan database terpisah untuk demo. Aplikasi membuat tabel snapshot saat digunakan. Permintaan berjalan dalam transaksi dengan penguncian baris agar perubahan stok dan pesanan tetap atomik. Penyimpanan snapshot ini cocok untuk demo bertrafik rendah. Jika koneksi Postgres belum dikonfigurasi di Vercel, aplikasi menampilkan katalog dan menyimpan keranjang lokal; checkout, transaksi kasir dan login dinonaktifkan.
+Hubungkan repositori dengan proyek Next.js dan gunakan Node.js 24. Deployment publik menampilkan katalog serta lokasi toko dan menyimpan draft keranjang di browser. Mode kasir demo hanya bisa dijalankan secara lokal. Adapter Postgres untuk pengujian bisa menggunakan `POSTGRES_URL` (atau `DATABASE_URL`) dengan database terpisah.
+
+### Login Google di Vercel
+
+Buat OAuth Client berjenis **Web application** di Google Cloud dan daftarkan callback `https://scanpay-go.vercel.app/api/auth/callback/google`. Atur `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, dan `AUTH_SECRET` (nilai acak kuat) di Environment Variables untuk Production, lalu deploy ulang. Login Google hanya menerima alamat email yang telah diverifikasi oleh Google. Akun yang masuk berperan sebagai pelanggan. Login demo lokal tidak tersedia pada deployment Vercel.
+
+Checkout Vercel memerlukan integrasi toko dan provider pembayaran yang disetujui. Mengisi kredensial Google atau konfigurasi Postgres saja tidak mengaktifkan pembayaran.

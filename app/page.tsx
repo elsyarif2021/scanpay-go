@@ -1,12 +1,13 @@
 'use client'
 import {useState,useEffect,useRef,useCallback, type FormEvent} from 'react'
 import {ScanLine, LayoutGrid, Store, History, UserRound, ShoppingBag, ChevronDown, Search, ArrowRight, MapPin, Plus, Minus, Sun, Moon, PanelLeftClose, Menu, X, Camera, Barcode, CreditCard, Banknote, ReceiptText, Download, CircleCheck, ShieldCheck, WifiOff, Package, Coffee, Apple, Sandwich, ChevronRight, QrCode} from 'lucide-react'
+import {signIn as googleSignIn,signOut as googleSignOut} from 'next-auth/react'
 import {storeLocations} from '../lib/store-locations'
 import {draftDB,type Draft} from '../lib/draft'
 type Product={store:string;code:string;name:string;category:string;price:number;stock:number;icon:string}
 type Branch={id:string;name:string;merchant:string;area:string;active:number}
 type Order={id:string;store:string;status:string;payment:string;verification:string;total:number;commission:number;received:number|null;created:number;expires:number;qr?:string;qrImage?:string;items:{code:string;name:string;price:number;qty:number}[]}
-type Session={role:string|null;store:string|null;readOnly?:boolean}
+type Session={role:string|null;store:string|null;readOnly?:boolean;name?:string;googleLoginConfigured?:boolean}
 type InstallEvent=Event & {prompt:()=>Promise<void>}
 type AdminData={commission:number;logs:{action:string;entity:string;time:number;actor:string}[]}
 const money=(v:number)=>'Rp'+new Intl.NumberFormat('id-ID').format(v)
@@ -60,7 +61,7 @@ function Scanner({detected}:{detected:(code:string)=>void}) {
 }
 export default function Page(){
  const [view,setView]=useState('Beranda')
- const [session,setSession]=useState<Session>({role:null,store:null})
+ const [session,setSession]=useState<Session>({role:null,store:null,readOnly:process.env.NEXT_PUBLIC_VERCEL_ENV==='production'||process.env.NEXT_PUBLIC_VERCEL_ENV==='preview'})
  const [stores,setStores]=useState<Branch[]>([])
  const [products,setProducts]=useState<Product[]>([])
  const [draft,setDraft]=useState<Draft|null>(null)
@@ -101,6 +102,7 @@ export default function Page(){
   let cancelled=false
   draftDB().catch(()=>undefined).then(async saved=>{
    if(cancelled)return
+   if(new URLSearchParams(window.location.search).get('view')==='profil')setView('Profil')
    const id=saved?.store||'kemang'
    setDraft(saved||{store:id,items:{},key:crypto.randomUUID()})
    try{const result=await api<Session>('session');if(!cancelled){setSession(result);if(result.store)setStaffBranch(result.store);if(result.role&&result.role!=='customer')setView('Dashboard')}await reload(id)}
@@ -120,11 +122,11 @@ export default function Page(){
  useEffect(()=>{if(!toast)return;const t=setTimeout(()=>setToast(''),3600);return ()=>clearTimeout(t)},[toast])
  const refreshOrders=useCallback(async()=>{if(session.role){const data=await api<Order[]>('orders');setOrders(data);setReceipt(current=>current?data.find(row=>row.id===current.id)||current:current)}},[session.role])
  useEffect(()=>{
-  if(!session.role||!online)return
+  if(!session.role||!online||session.readOnly)return
   refreshOrders().catch(()=>{})
   const timer=setInterval(()=>refreshOrders().catch(()=>{}),5000)
   return ()=>clearInterval(timer)
- },[refreshOrders,session.role,online])
+ },[refreshOrders,session.role,session.readOnly,online])
  useEffect(()=>{
   if(!online||!session.role||session.role==='customer'||session.role==='cashier')return
   api<Branch[]>('branches').then(setBranches).catch(e=>notify(e.message))
@@ -208,7 +210,7 @@ export default function Page(){
   <button className="brand" onClick={()=>go(staff?'Dashboard':'Beranda')}><span><ScanLine size={24}/></span><strong>Scan<b>Pay</b><small>SCAN. PAY. GO.</small></strong></button>
   <div className="nav-label">MENU UTAMA</div>
   {(staff?([['Dashboard',LayoutGrid],['Riwayat',History],['Profil',UserRound]] as const):nav).map(([name,Icon])=><button key={name} className={'nav-item '+(view===name?'current':'')} onClick={()=>go(name)} title={name}><Icon size={20}/><span>{name}</span>{name==='Scan'&&<kbd>↗</kbd>}</button>)}
-  <div className="side-bottom"><div className="connection">{online?<i/>:<WifiOff size={15}/>}<span>{online?'Terhubung':'Offline'}</span></div><button className="nav-item" onClick={()=>go('Profil')}><span className="avatar">{session.role?labels[session.role][0]:'T'}</span><span>{session.role?labels[session.role]:'Tamu'}</span><ChevronRight size={15}/></button></div>
+  <div className="side-bottom"><div className="connection">{online?<i/>:<WifiOff size={15}/>}<span>{online?'Terhubung':'Offline'}</span></div><button className="nav-item" onClick={()=>go('Profil')}><span className="avatar">{session.role?labels[session.role][0]:'T'}</span><span>{session.name||(session.role?labels[session.role]:'Belum masuk')}</span><ChevronRight size={15}/></button></div>
  </aside>
  <div className="main">
   <header className="top">
@@ -219,7 +221,7 @@ export default function Page(){
    {!staff&&<button className="icon bag" aria-label={'Keranjang, '+count+' barang'} onClick={()=>setModal('cart')}><ShoppingBag size={20}/>{count>0&&<b>{count}</b>}</button>}</div>
   </header>
   <main>
-  {session.readOnly&&<div className="banner">Katalog tersedia. Checkout dan akun demo menunggu konfigurasi database.</div>}
+  {session.readOnly&&<div className="banner">Checkout tersedia setelah toko terhubung.</div>}
   {!online&&<div className="banner"><WifiOff size={17}/> Sedang offline. Draft keranjang tersimpan di perangkat.</div>}
   {failure&&<div className="banner">{failure}<button className="link" onClick={()=>void perform(()=>reload(branch))}>Coba lagi</button></div>}
   {!staff&&(view==='Beranda'||view==='Scan')&&<>
@@ -255,9 +257,23 @@ export default function Page(){
    {!loading&&!matchingStores.length&&!matchingLocations.length&&<div className="empty">Toko tidak ditemukan.</div>}
   </>}
   {view==='Riwayat'&&<><div className="heading"><div><h1>Riwayat transaksi</h1><p>Lihat status dan buka detail transaksi.</p></div>{staff&&<button className="secondary" onClick={()=>exportCSV(filteredOrders)}><Download size={17}/> Ekspor CSV</button>}</div>
-   {session.role?<><select className="filter" aria-label="Filter status transaksi" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Semua status</option>{['pending_payment','completed','cancelled','expired'].map(s=><option key={s} value={s}>{labels[s]}</option>)}</select><div className="order-list">{filteredOrders.map(o=><button className="order-row" key={o.id} onClick={()=>openReceipt(o)}><ReceiptText/><span><strong>{o.id.slice(0,8).toUpperCase()}</strong><small>{storeName(o.store)} · {date(o.created)}</small></span><span className="badge">{labels[o.status]}</span><b>{money(o.total)}</b><ChevronRight size={16}/></button>)}</div>{!filteredOrders.length&&<div className="empty"><History/> Belum ada transaksi.</div>}</>:<div className="empty"><History/> Masuk untuk melihat transaksi.<button className="primary" onClick={()=>setModal('login')}>Masuk demo</button></div>}
+   {session.readOnly?<div className="empty"><History/> Belum ada transaksi di toko yang terhubung.{!session.role&&<button className="primary" onClick={()=>go('Profil')}>Masuk dengan Google</button>}</div>:session.role?<><select className="filter" aria-label="Filter status transaksi" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Semua status</option>{['pending_payment','completed','cancelled','expired'].map(s=><option key={s} value={s}>{labels[s]}</option>)}</select><div className="order-list">{filteredOrders.map(o=><button className="order-row" key={o.id} onClick={()=>openReceipt(o)}><ReceiptText/><span><strong>{o.id.slice(0,8).toUpperCase()}</strong><small>{storeName(o.store)} · {date(o.created)}</small></span><span className="badge">{labels[o.status]}</span><b>{money(o.total)}</b><ChevronRight size={16}/></button>)}</div>{!filteredOrders.length&&<div className="empty"><History/> Belum ada transaksi.</div>}</>:<div className="empty"><History/> Masuk untuk melihat transaksi.<button className="primary" onClick={()=>setModal('login')}>Masuk demo</button></div>}
   </>}
-  {view==='Profil'&&<><div className="heading"><div><h1>Profil</h1><p>Kelola sesi, tampilan, dan pemasangan ScanPay.</p></div></div><div className="panel profile"><div className="tile-icon"><UserRound/></div><h2>{session.role?labels[session.role]:'Tamu'}</h2><p>Lingkungan uji coba ScanPay</p><div className="inline"><button className="primary" disabled={busy} onClick={()=>session.role?void perform(async()=>{await api('logout');setSession({role:null,store:null});setOrders([]);setReceipt(null);setTicket(null);setModal('');go('Beranda')}):setModal('login')}>{session.role?'Keluar':'Masuk demo'}</button><button className="secondary" onClick={()=>install?void install.prompt().then(()=>setInstall(null)).catch(()=>setModal('install')):setModal('install')}><Download size={17}/> Instal ScanPay</button></div></div></>}
+  {view==='Profil'&&<>
+   <div className="heading"><div><h1>Profil</h1><p>Kelola akun dan pemasangan ScanPay.</p></div></div>
+   <div className="panel profile">
+    <div className="tile-icon"><UserRound/></div>
+    <h2>{session.name||(session.role?labels[session.role]:'Belum masuk')}</h2>
+    <div className="inline">
+     {session.readOnly ? (session.role
+      ? <button className="primary" disabled={!online||busy} onClick={()=>void perform(async()=>{await googleSignOut({redirectTo:'/?view=profil'})})}>Keluar</button>
+      : <button className="primary" disabled={!online||busy||!session.googleLoginConfigured} onClick={()=>void perform(async()=>{await googleSignIn('google',{redirectTo:'/?view=profil'})})}>Masuk dengan Google</button>)
+     : <button className="primary" disabled={busy} onClick={()=>session.role?void perform(async()=>{await api('logout');setSession({role:null,store:null});setOrders([]);setReceipt(null);setTicket(null);setModal('');go('Beranda')}):setModal('login')}>{session.role?'Keluar':'Masuk demo lokal'}</button>}
+     <button className="secondary" onClick={()=>install?void install.prompt().then(()=>setInstall(null)).catch(()=>setModal('install')):setModal('install')}><Download size={17}/> Instal ScanPay</button>
+    </div>
+    {session.readOnly&&!session.role&&!session.googleLoginConfigured&&<p>Login Google menunggu konfigurasi OAuth.</p>}
+   </div>
+  </>}
   {staff&&view==='Dashboard'&&<>
    <div className="heading"><div><h1>Dashboard {labels[session.role!].toLowerCase()}</h1><p>{session.role==='admin'?'Pantau transaksi dan pengaturan marketplace.':storeName(session.store||'')}</p></div>{['cashier','manager'].includes(session.role!)&&<button className="primary" onClick={()=>setModal('ticket')}><QrCode size={19}/> Scan QR pelanggan</button>}</div>
    <div className="metrics">{[['Penjualan tercatat',money(sales)],['Menunggu pembayaran',orders.filter(o=>o.status==='pending_payment').length],['Selesai',done.length],['Komisi transaksi selesai',money(commission)]].map(([label,value])=><article className="panel" key={label}><small>{label}</small><h2>{value}</h2></article>)}</div>
