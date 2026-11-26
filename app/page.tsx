@@ -2,8 +2,7 @@
 import {useState,useEffect,useRef,useCallback, type FormEvent} from 'react'
 import {ScanLine, LayoutGrid, Store, History, UserRound, ShoppingBag, ChevronDown, Search, ArrowRight, MapPin, Plus, Minus, Sun, Moon, PanelLeftClose, Menu, X, Camera, Barcode, CreditCard, Banknote, ReceiptText, Download, CircleCheck, ShieldCheck, WifiOff, Package, Coffee, Apple, Sandwich, ChevronRight, QrCode} from 'lucide-react'
 import {signIn as googleSignIn,signOut as googleSignOut} from 'next-auth/react'
-import {storeLocations,type StoreLocation} from '../lib/store-locations'
-import {StoreDirectoryAdmin} from './store-directory-admin'
+import {storeLocations} from '../lib/store-locations'
 import {draftDB,type Draft} from '../lib/draft'
 type Product={store:string;code:string;name:string;category:string;price:number;stock:number;icon:string}
 type Branch={id:string;name:string;merchant:string;area:string;active:number}
@@ -140,7 +139,7 @@ export default function Page(){
  },[staffBranch,session.role,online,notify])
  useEffect(()=>{if(online&&failure)void reload(branch).catch(()=>{})},[online,branch,failure,reload])
  useEffect(()=>{
-  if(!online||!['Toko','Kelola Toko'].includes(view))return
+  if(!online||view!=='Toko')return
   const controller=new AbortController()
   fetch('/api/store-directory',{cache:'no-store',signal:controller.signal}).then(async response=>{
    if(!response.ok)throw new Error()
@@ -284,14 +283,8 @@ export default function Page(){
      : <button className="primary" disabled={busy} onClick={()=>session.role?void perform(async()=>{await api('logout');setSession({role:null,store:null});setOrders([]);setReceipt(null);setTicket(null);setModal('');go('Beranda')}):setModal('login')}>{session.role?'Keluar':'Masuk demo lokal'}</button>}
      <button className="secondary" onClick={()=>install?void install.prompt().then(()=>setInstall(null)).catch(()=>setModal('install')):setModal('install')}><Download size={17}/> Instal ScanPay</button>
     </div>
-    {session.readOnly&&session.role&&<a className="secondary directions stretch" href="/mitra"><Store size={17}/> Dashboard Mitra</a>}
-    {session.directoryAdmin&&<button className="secondary stretch" onClick={()=>go('Kelola Toko')}><Store size={17}/> Kelola Toko</button>}
     {session.readOnly&&!session.role&&!session.googleLoginConfigured&&<p>Login Google menunggu konfigurasi OAuth.</p>}
    </div>
-  </>}
-  {session.directoryAdmin&&view==='Kelola Toko'&&<>
-   {locationError&&<div className="banner">{locationError}</div>}
-   <StoreDirectoryAdmin locations={locations} configured={!!session.directoryConfigured&&online} onSaved={location=>setLocations(current=>[...current.filter(item=>item.id!==location.id),location].sort((a,b)=>a.name.localeCompare(b.name,'id')))}/>
   </>}
   {staff&&view==='Dashboard'&&<>
    <div className="heading"><div><h1>Dashboard {labels[session.role!].toLowerCase()}</h1><p>{session.role==='admin'?'Pantau transaksi dan pengaturan marketplace.':storeName(session.store||'')}</p></div>{['cashier','manager'].includes(session.role!)&&<button className="primary" onClick={()=>setModal('ticket')}><QrCode size={19}/> Scan QR pelanggan</button>}</div>

@@ -10,7 +10,8 @@ const fail=(error:string,status:number)=>response({error},status)
 const identity=async()=>googleLoginConfigured?(await auth())?.user?.email?.trim().toLowerCase():undefined
 
 export async function GET(req:Request){
- const bill=new URL(req.url).searchParams.get('tagihan')
+ const query=new URL(req.url).searchParams
+ const bill=query.get('tagihan')
  try{
   if(bill!==null){
    if(!isUUID(bill))return fail('Tagihan tidak ditemukan.',404)
@@ -25,11 +26,14 @@ export async function GET(req:Request){
   if(!email)return fail('Masuk dengan Google untuk membuka Dashboard Mitra.',401)
   if(!merchantConfigured)return fail('Database mitra belum terhubung.',503)
   const db=await merchantDB()
+  if(query.has('admin')){
+   if(!canManageDirectory(email))return fail('Akses admin diperlukan.',403)
+   const {rows}=await db.query("SELECT id,name,address,owner_email FROM scanpay_merchants WHERE status='pending' ORDER BY created_at LIMIT 100")
+   return response({pending:rows})
+  }
   const {rows:[merchant]}=await db.query('SELECT id,name,address,status,(qris IS NOT NULL) AS has_qris FROM scanpay_merchants WHERE owner_email=$1',[email])
-  const admin=canManageDirectory(email)
   const invoices=merchant?.status==='approved'?(await db.query('SELECT id,amount,method,paid_at,created_at FROM scanpay_merchant_invoices WHERE merchant_id=$1 ORDER BY created_at DESC LIMIT 50',[merchant.id])).rows:[]
-  const pending=admin?(await db.query("SELECT id,name,address,owner_email FROM scanpay_merchants WHERE status='pending' ORDER BY created_at LIMIT 100")).rows:[]
-  return response({merchant:merchant??null,admin,invoices,pending})
+  return response({merchant:merchant??null,invoices})
  }catch{return fail('Data mitra belum dapat dimuat.',503)}
 }
 
