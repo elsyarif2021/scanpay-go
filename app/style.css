@@ -13,3 +13,4 @@ main{max-width:1470px;margin:auto;padding:28px clamp(16px,3.2vw,44px) 75px}.head
 @media(max-width:360px){.top{padding:0 9px}.hero-body{width:92%}.location select{max-width:102px}.product-art{height:90px}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
 @media print{body{background:white;color:black}.shell>.main,.side,.no-print,.close,.toast{display:none!important}.overlay{display:block;position:static;background:none;padding:0}.dialog{box-shadow:none;border-radius:0;color:black;background:white;width:100%;max-width:80mm;max-height:none;margin:auto;padding:3mm}.receipt .badge{background:white;color:black}}
+.directions{text-decoration:none}.directions:hover{border-color:var(--green)}.directions:focus-visible{outline:2px solid #10b981;outline-offset:3px}@media(max-width:480px){.store-grid{grid-template-columns:1fr}}

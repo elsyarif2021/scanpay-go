@@ -1,6 +1,7 @@
 'use client'
 import {useState,useEffect,useRef,useCallback, type FormEvent} from 'react'
 import {ScanLine, LayoutGrid, Store, History, UserRound, ShoppingBag, ChevronDown, Search, ArrowRight, MapPin, Plus, Minus, Sun, Moon, PanelLeftClose, Menu, X, Camera, Barcode, CreditCard, Banknote, ReceiptText, Download, CircleCheck, ShieldCheck, WifiOff, Package, Coffee, Apple, Sandwich, ChevronRight, QrCode} from 'lucide-react'
+import {storeLocations} from '../lib/store-locations'
 import {draftDB,type Draft} from '../lib/draft'
 type Product={store:string;code:string;name:string;category:string;price:number;stock:number;icon:string}
 type Branch={id:string;name:string;merchant:string;area:string;active:number}
@@ -138,6 +139,9 @@ export default function Page(){
  const cart=products.filter(p=>items[p.code])
  const total=cart.reduce((sum,p)=>sum+p.price*items[p.code],0)
  const matching=products.filter(p=>(category==='Semua'||p.category===category)&&[p.name,p.category,p.code].join(' ').toLowerCase().includes(query.trim().toLowerCase()))
+ const storeQuery=query.trim().toLowerCase()
+ const matchingStores=stores.filter(s=>[s.name,s.area].join(' ').toLowerCase().includes(storeQuery))
+ const matchingLocations=storeLocations.filter(s=>[s.name,s.address].join(' ').toLowerCase().includes(storeQuery))
  const filteredOrders=orders.filter(o=>filter==='all'||filter===o.status)
  const done=orders.filter(o=>o.status==='completed')
  const sales=done.reduce((sum,o)=>sum+o.total,0)
@@ -226,7 +230,30 @@ export default function Page(){
    <div className="products">{loading?Array.from({length:4},(_,i)=><div className="skeleton" key={i}/>):matching.map((p,i)=><article className="product" key={p.code}><button className={'product-art art-'+i%6} aria-label={'Detail '+p.name} onClick={()=>showProduct(p)}><span>{p.icon}</span></button><div className="product-info"><small>{p.category}</small><button className="product-name" onClick={()=>showProduct(p)}>{p.name}</button><div><strong>{money(p.price)}</strong><button aria-label={'Tambah '+p.name} className="add" disabled={!p.stock} onClick={()=>{quantity(p,(items[p.code]||0)+1);if((items[p.code]||0)<p.stock)notify(p.name+' ditambahkan.')}}><Plus size={19}/></button></div></div></article>)}</div>
    {!loading&&!matching.length&&<div className="empty"><Package/> Produk tidak ditemukan.</div>}
   </>}
-  {!staff&&view==='Toko'&&<><div className="heading"><div><h1>Pilih toko</h1><p>Cari merchant dan cabang yang tersedia.</p></div><label className="search"><Search size={18}/><input aria-label="Cari toko" placeholder="Cari nama atau lokasi…" value={query} onChange={e=>setQuery(e.target.value)}/></label></div><div className="store-grid">{stores.filter(s=>(s.name+' '+s.area).toLowerCase().includes(query.toLowerCase())).map(s=><article className="panel" key={s.id}><div className="tile-icon"><Store/></div><h2>{s.name}</h2><p><MapPin size={15}/> {s.area}</p><button disabled={s.id===branch||busy} className="secondary" onClick={()=>void selectBranch(s.id)}>{s.id===branch?'Cabang aktif':'Pilih cabang'}<ArrowRight size={16}/></button></article>)}</div>{!stores.some(s=>(s.name+' '+s.area).toLowerCase().includes(query.toLowerCase()))&&<div className="empty">Toko tidak ditemukan.</div>}</>}
+  {!staff&&view==='Toko'&&<>
+   <div className="heading">
+    <div><h1>Pilih toko</h1><p>Cari gerai dan lokasi belanja.</p></div>
+    <label className="search"><Search size={18}/><input aria-label="Cari toko" placeholder="Cari nama atau lokasi…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
+   </div>
+   {matchingLocations.length>0&&<>
+    <div className="section-title"><h2>Lokasi gerai</h2></div>
+    <div className="store-grid">{matchingLocations.map(location=><article className="panel" key={location.name}>
+     <div className="tile-icon"><Store/></div>
+     <h2>{location.name}</h2>
+     <p><MapPin size={15}/> {location.address}</p>
+     <p><span className="badge">Transaksi belum terhubung</span></p>
+     <a className="secondary directions" href={location.directions} target="_blank" rel="noopener noreferrer" aria-label={'Petunjuk arah ke '+location.name}>Petunjuk arah <ArrowRight size={16}/></a>
+    </article>)}</div>
+   </>}
+   {matchingStores.length>0&&<>
+    <div className="section-title"><h2>Toko demo</h2></div>
+    <div className="store-grid">{matchingStores.map(s=><article className="panel" key={s.id}>
+     <div className="tile-icon"><Store/></div><h2>{s.name}</h2><p><MapPin size={15}/> {s.area}</p>
+     <button disabled={s.id===branch||busy} className="secondary" onClick={()=>void selectBranch(s.id)}>{s.id===branch?'Cabang aktif':'Pilih cabang'}<ArrowRight size={16}/></button>
+    </article>)}</div>
+   </>}
+   {!loading&&!matchingStores.length&&!matchingLocations.length&&<div className="empty">Toko tidak ditemukan.</div>}
+  </>}
   {view==='Riwayat'&&<><div className="heading"><div><h1>Riwayat transaksi</h1><p>Lihat status dan buka detail transaksi.</p></div>{staff&&<button className="secondary" onClick={()=>exportCSV(filteredOrders)}><Download size={17}/> Ekspor CSV</button>}</div>
    {session.role?<><select className="filter" aria-label="Filter status transaksi" value={filter} onChange={e=>setFilter(e.target.value)}><option value="all">Semua status</option>{['pending_payment','completed','cancelled','expired'].map(s=><option key={s} value={s}>{labels[s]}</option>)}</select><div className="order-list">{filteredOrders.map(o=><button className="order-row" key={o.id} onClick={()=>openReceipt(o)}><ReceiptText/><span><strong>{o.id.slice(0,8).toUpperCase()}</strong><small>{storeName(o.store)} · {date(o.created)}</small></span><span className="badge">{labels[o.status]}</span><b>{money(o.total)}</b><ChevronRight size={16}/></button>)}</div>{!filteredOrders.length&&<div className="empty"><History/> Belum ada transaksi.</div>}</>:<div className="empty"><History/> Masuk untuk melihat transaksi.<button className="primary" onClick={()=>setModal('login')}>Masuk demo</button></div>}
   </>}
