@@ -5,7 +5,7 @@ import {draftDB,type Draft} from '../lib/draft'
 type Product={store:string;code:string;name:string;category:string;price:number;stock:number;icon:string}
 type Branch={id:string;name:string;merchant:string;area:string;active:number}
 type Order={id:string;store:string;status:string;payment:string;verification:string;total:number;commission:number;received:number|null;created:number;expires:number;qr?:string;qrImage?:string;items:{code:string;name:string;price:number;qty:number}[]}
-type Session={role:string|null;store:string|null}
+type Session={role:string|null;store:string|null;readOnly?:boolean}
 type InstallEvent=Event & {prompt:()=>Promise<void>}
 type AdminData={commission:number;logs:{action:string;entity:string;time:number;actor:string}[]}
 const money=(v:number)=>'Rp'+new Intl.NumberFormat('id-ID').format(v)
@@ -215,6 +215,7 @@ export default function Page(){
    {!staff&&<button className="icon bag" aria-label={'Keranjang, '+count+' barang'} onClick={()=>setModal('cart')}><ShoppingBag size={20}/>{count>0&&<b>{count}</b>}</button>}</div>
   </header>
   <main>
+  {session.readOnly&&<div className="banner">Katalog tersedia. Checkout dan akun demo menunggu konfigurasi database.</div>}
   {!online&&<div className="banner"><WifiOff size={17}/> Sedang offline. Draft keranjang tersimpan di perangkat.</div>}
   {failure&&<div className="banner">{failure}<button className="link" onClick={()=>void perform(()=>reload(branch))}>Coba lagi</button></div>}
   {!staff&&(view==='Beranda'||view==='Scan')&&<>
@@ -248,8 +249,8 @@ export default function Page(){
  {count===0&&<div className="empty"><ShoppingBag/> Keranjang kosong.</div>}{Object.entries(items).filter(([code])=>!cart.some(p=>p.code===code)).map(([code,n])=><div key={code} className="row"><span>{code} × {n}</span><button className="secondary" onClick={()=>{const next={...items};delete next[code];setDraft({store:branch,items:next,key:crypto.randomUUID()})}}>Hapus</button></div>)}
  <div className="row total"><strong>Total</strong><strong>{cart.length?money(total):'—'}</strong></div>
  {modal==='checkout'&&<><div className="method"><Banknote size={21}/> Bayar tunai di kasir <CircleCheck size={18}/></div><div className="method muted"><CreditCard size={21}/> QRIS, e-wallet, VA belum tersedia</div></>}
- <button className="primary stretch" disabled={!count||!online||busy||!cart.length} onClick={()=>modal==='cart'?setModal('checkout'):void checkout()}>{modal==='cart'?'Lanjut checkout':'Buat pesanan tunai'}<ArrowRight size={17}/></button></>}
- {['login','login-checkout'].includes(modal)&&<><h2>Masuk akun demo</h2><p>Pilih peran dan cabang untuk mencoba ScanPay.</p><select className="filter stretch" value={staffBranch} aria-label="Cabang akun demo" onChange={e=>setStaffBranch(e.target.value)}><option value="kemang">FreshMart Kemang</option><option value="tebet">FreshMart Tebet</option><option value="menteng">DailyGoods Menteng</option></select><div className="role-grid">{Object.entries(labels).slice(0,5).map(([role,name])=><button className="secondary" disabled={busy||!online} key={role} onClick={()=>void signIn(role)}>{name}<ArrowRight size={16}/></button>)}</div></>}
+ <button className="primary stretch" disabled={session.readOnly||!count||!online||busy||!cart.length} onClick={()=>modal==='cart'?setModal('checkout'):void checkout()}>{modal==='cart'?'Lanjut checkout':'Buat pesanan tunai'}<ArrowRight size={17}/></button></>}
+ {['login','login-checkout'].includes(modal)&&<><h2>Masuk akun demo</h2><p>Pilih peran dan cabang untuk mencoba ScanPay.</p><select className="filter stretch" value={staffBranch} aria-label="Cabang akun demo" onChange={e=>setStaffBranch(e.target.value)}><option value="kemang">FreshMart Kemang</option><option value="tebet">FreshMart Tebet</option><option value="menteng">DailyGoods Menteng</option></select><div className="role-grid">{Object.entries(labels).slice(0,5).map(([role,name])=><button className="secondary" disabled={session.readOnly||busy||!online} key={role} onClick={()=>void signIn(role)}>{name}<ArrowRight size={16}/></button>)}</div></>}
  {modal==='install'&&<><h2>Instal ScanPay</h2><p>Di Safari iPhone, buka Bagikan dan pilih Tambahkan ke Layar Utama. Di browser desktop atau Android, buka menu browser lalu pilih Instal aplikasi jika tersedia.</p></>}
  {modal==='ticket'&&<><h2>Scan QR pelanggan</h2><p>Pindai QR atau masukkan kode dari layar pelanggan.</p><Scanner detected={inspect}/></>}
  {modal==='cash'&&ticket&&<form onSubmit={complete}><h2>Verifikasi &amp; terima tunai</h2><p>Centang setiap baris setelah mencocokkan barang fisik.</p>{ticket.items.map(item=><label className="row check" key={item.code}><span>{item.name} × {item.qty}</span><input type="checkbox" checked={verified.includes(item.code)} onChange={e=>setVerified(e.target.checked?[...verified,item.code]:verified.filter(code=>code!==item.code))}/></label>)}<div className="row total"><b>Total</b><b>{money(ticket.total)}</b></div><label className="field">Uang diterima<input type="number" min={ticket.total} max={1000000000} step="1" required value={received} onChange={e=>setReceived(e.target.value)}/></label><div className="row"><b>Kembalian</b><b>{money(Math.max(0,Number(received)-ticket.total))}</b></div><button className="primary stretch" disabled={busy||!online||verified.length!==ticket.items.length}>Konfirmasi pembayaran tunai</button></form>}

@@ -56,3 +56,7 @@ Uji Chromium headless mencakup alur pelanggan ke kasir dengan dua sesi, pembarua
 Versi ini adalah demo lokal dengan pemilihan peran terbuka. Gunakan satu server Node dengan volume persisten dan batasi akses ke lingkungan uji. SQLite lokal tidak cocok untuk fungsi serverless Vercel. Untuk uji lewat perangkat lain gunakan HTTPS di jaringan uji yang aksesnya terbatas.
 
 `supabase/migrations/` berisi rancangan awal PostgreSQL dan kebijakan RLS baca untuk peran yang relevan. Runtime belum menggunakan migrasi itu. Supabase Auth, Realtime, deployment Vercel serta integrasi QRIS, e-wallet, VA, webhook, refund dan settlement masih memerlukan implementasi dan verifikasi. Fitur lanjutan PDF seperti voucher, promosi, onboarding merchant, Web Push dan pelaporan lengkap juga belum tersedia.
+
+### Vercel
+
+Hubungkan repositori dengan proyek Next.js dan gunakan Node.js 24. Untuk demo transaksi, sambungkan Postgres dan atur `POSTGRES_URL` (atau `DATABASE_URL`) sebagai variabel server. Gunakan database terpisah untuk demo. Aplikasi membuat tabel snapshot saat digunakan. Permintaan berjalan dalam transaksi dengan penguncian baris agar perubahan stok dan pesanan tetap atomik. Penyimpanan snapshot ini cocok untuk demo bertrafik rendah. Jika koneksi Postgres belum dikonfigurasi di Vercel, aplikasi menampilkan katalog dan menyimpan keranjang lokal; checkout, transaksi kasir dan login dinonaktifkan.

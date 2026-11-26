@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { InputError, openDB, run } from '../../../lib/db.mjs'
+import { InputError } from '../../../lib/db.mjs'
+import { execute } from '../../../lib/hosted-db.mjs'
 import QRCode from 'qrcode'
 
 export const runtime = 'nodejs'
-let db: ReturnType<typeof openDB> | undefined
 export async function POST(req: NextRequest, {params}: {params: Promise<{action:string}>}) {
  try {
   const origin=req.headers.get('origin')
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest, {params}: {params: Promise<{action:
   try { body=JSON.parse(raw) } catch { throw new InputError('JSON tidak valid.') }
   if(!body || Array.isArray(body) || typeof body!=='object') throw new InputError('Data tidak valid.')
   const {action}=await params
-  const result=run(db??=openDB(),action,body,req.cookies.get('scanpay')?.value)
+  const result=await execute(action,body,req.cookies.get('scanpay')?.value)
   if(action==='checkout' && result.status==='pending_payment') result.qrImage=await QRCode.toDataURL(result.qr,{width:200,margin:1})
   if(action==='orders' && Array.isArray(result)) await Promise.all(result.filter(row=>row.qr).map(async row=>{row.qrImage=await QRCode.toDataURL(row.qr,{width:200,margin:1})}))
   const token=action==='login'?result.token:undefined
