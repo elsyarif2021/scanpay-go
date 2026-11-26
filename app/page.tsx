@@ -284,6 +284,7 @@ export default function Page(){
      : <button className="primary" disabled={busy} onClick={()=>session.role?void perform(async()=>{await api('logout');setSession({role:null,store:null});setOrders([]);setReceipt(null);setTicket(null);setModal('');go('Beranda')}):setModal('login')}>{session.role?'Keluar':'Masuk demo lokal'}</button>}
      <button className="secondary" onClick={()=>install?void install.prompt().then(()=>setInstall(null)).catch(()=>setModal('install')):setModal('install')}><Download size={17}/> Instal ScanPay</button>
     </div>
+    {session.readOnly&&session.role&&<a className="secondary directions stretch" href="/mitra"><Store size={17}/> Dashboard Mitra</a>}
     {session.directoryAdmin&&<button className="secondary stretch" onClick={()=>go('Kelola Toko')}><Store size={17}/> Kelola Toko</button>}
     {session.readOnly&&!session.role&&!session.googleLoginConfigured&&<p>Login Google menunggu konfigurasi OAuth.</p>}
    </div>
